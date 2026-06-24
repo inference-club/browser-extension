@@ -14,9 +14,15 @@ export default defineConfig({
     // `activeTab` + `scripting` let us read the current tab ONLY on a user
     // gesture (no broad host permissions). `contextMenus` returns in V1.
     permissions: ['activeTab', 'scripting', 'storage', 'sidePanel'],
-    // Extension-context fetches (side panel / service worker) to these hosts
-    // bypass CORS thanks to host_permissions — no server change needed.
-    host_permissions: ['https://inference.club/*', 'http://localhost:8000/*'],
+    // Extension-context fetches (side panel) to these hosts bypass CORS thanks
+    // to host_permissions — no server change needed. The API lives on the
+    // `api.` subdomain; localhost (any port) covers local dev.
+    host_permissions: [
+      'https://api.inference.club/*',
+      'https://inference.club/*',
+      'http://localhost/*',
+      'http://127.0.0.1/*',
+    ],
     action: {
       default_title: 'inference.club',
     },

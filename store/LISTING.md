@@ -95,17 +95,18 @@ The extension's main interface is a Chrome side panel docked next to the page, w
 the summary, answers, and controls are shown.
 ```
 
-- **Host permission: https://inference.club/***
+- **Host permission: https://api.inference.club/*** (and https://inference.club/*)
 ```
 The extension sends the page text and the user's prompts to the user's own
-inference.club account at this origin to generate summaries and answers. This is the
-only server the extension talks to.
+inference.club API at this origin to generate summaries and answers. This is the
+only remote server the extension talks to.
 ```
 
-- **Host permission: http://localhost:8000/***
+- **Host permission: http://localhost/*** (and http://127.0.0.1/*)
 ```
 Optional. Lets advanced users point the extension at a locally-running or self-hosted
-inference.club backend during development. Editable in the extension's settings.
+inference.club backend during development (any port). Editable in the extension's
+settings.
 ```
 
 _(No broad host permissions: the extension declares no content scripts and no

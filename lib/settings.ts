@@ -12,7 +12,7 @@ export interface Settings {
 export type SummaryStyle = 'tldr' | 'bullets' | 'eli5' | 'takeaways';
 
 export const DEFAULTS: Settings = {
-  baseUrl: 'https://inference.club',
+  baseUrl: 'https://api.inference.club',
   token: '',
   model: '',
   summaryStyle: 'bullets',
