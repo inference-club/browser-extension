@@ -125,7 +125,10 @@ action.
 Check all three certification boxes (single-purpose use; no unauthorized transfer;
 no creditworthiness use).
 
-**Privacy policy URL:** <FILL IN — the hosted URL of store/PRIVACY.md, see README>
+**Privacy policy URL:**
+```
+https://github.com/inference-club/browser-extension/blob/main/store/PRIVACY.md
+```
 
 ---
 
