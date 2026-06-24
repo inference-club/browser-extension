@@ -12,16 +12,27 @@ export interface Article {
   error?: string;
 }
 
+// Inject the extraction content script into the active tab on demand. This
+// relies on `activeTab` (granted when the user invokes the extension) + the
+// `scripting` permission — no broad host permissions needed.
+async function ensureInjected(tabId: number): Promise<void> {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['content-scripts/content.js'],
+  });
+}
+
 export async function captureActiveTab(): Promise<Article> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return { ok: false, error: 'No active tab.' };
   try {
+    await ensureInjected(tab.id);
     return await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_ARTICLE' });
   } catch {
-    // No content script here (chrome:// pages, the web store, PDFs, etc.)
+    // chrome:// pages, the web store, PDFs, or activeTab not granted for this tab.
     return {
       ok: false,
-      error: 'Can’t read this page. Open a normal article tab and try again.',
+      error: 'Can’t read this page. Open a normal article tab, then click the extension icon.',
     };
   }
 }
@@ -30,6 +41,7 @@ export async function captureSelection(): Promise<string> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return '';
   try {
+    await ensureInjected(tab.id);
     const res = await chrome.tabs.sendMessage(tab.id, { type: 'GET_SELECTION' });
     return res?.text ?? '';
   } catch {

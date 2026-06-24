@@ -44,11 +44,13 @@ governed by inference.club's own terms and privacy practices.
 
 ## Permissions
 
-- **activeTab** — read the page you are actively viewing, only after you click an action.
+- **activeTab** + **scripting** — read the page you are actively viewing, only after you
+  invoke the extension, by injecting a read-only extraction script into that one tab.
+  The extension requests no access to other sites.
 - **storage** — save your token, base URL, and preferences locally.
 - **sidePanel** — show the extension's interface beside the page.
-- **Host access** — read article text from pages you choose to act on, and send requests
-  to your configured inference.club origin.
+- **Host access** — limited to your configured inference.club origin, where requests are
+  sent.
 
 ## Contact
 

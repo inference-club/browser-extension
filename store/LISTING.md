@@ -1,6 +1,6 @@
 # Chrome Web Store listing — copy/paste fields
 
-Upload `.output/inference-club-extension-0.0.1-chrome.zip` at
+Upload `.output/inference-club-extension-0.0.2-chrome.zip` at
 https://chrome.google.com/webstore/devconsole → **New item**, then fill the
 fields below. Assets to upload are in this `store/` folder.
 
@@ -71,9 +71,16 @@ account.
 
 - **activeTab**
 ```
-Used to access the page the user is actively viewing — only after they click an
-action in the extension — so we can read its article text to summarize or answer
-questions about it.
+Grants temporary access to the tab the user is actively viewing — only after they
+invoke the extension — so we can read its article text to summarize or answer
+questions about it. No access to any other tab or site.
+```
+
+- **scripting**
+```
+Used to inject a small, read-only extraction script into the active tab (on the
+user's gesture) that pulls out the readable article text. Combined with activeTab,
+this avoids requesting access to all sites.
 ```
 
 - **storage**
@@ -101,13 +108,9 @@ Optional. Lets advanced users point the extension at a locally-running or self-h
 inference.club backend during development. Editable in the extension's settings.
 ```
 
-- **Content script on all sites (host access)**
-```
-The extension injects a small, read-only content script that extracts the readable
-article text from the page the user chooses to summarize. It only reads text and
-the current selection; it never modifies pages, and it runs only to fulfill a user
-action.
-```
+_(No broad host permissions: the extension declares no content scripts and no
+all-sites access. Page reading happens via on-demand injection into the active tab
+only, using activeTab + scripting.)_
 
 - **Remote code:** No — the extension executes no remotely-hosted code. All logic
   ships in the package.
