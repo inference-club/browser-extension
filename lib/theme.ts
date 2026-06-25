@@ -1,47 +1,49 @@
-// Theme handling: System / Light / Dark.
+// Theme handling: applies a named color palette as CSS custom properties on
+// <html>. Tailwind v4 utilities (bg-app, text-content, bg-accent, …) reference
+// these variables (see lib/style.css), so setting them restyles everything.
 //
-// Tailwind v4 is configured (in lib/style.css) so the `dark:` variant responds
-// to a `.dark` class on <html> rather than only `prefers-color-scheme`. This
-// lets the user force a theme. For `'system'` we mirror the OS preference and
-// keep it live via a matchMedia listener.
+// The special palette id 'system' tracks the OS light/dark preference live.
 
-import { getSettings, type Theme } from './settings';
+import { getSettings } from './settings';
+import { resolvePalette, type Palette } from './palettes';
 
 const mql = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
 let systemListener: ((e: MediaQueryListEvent) => void) | null = null;
 
-function setDark(isDark: boolean) {
+function setVars(p: Palette) {
   const root = document.documentElement;
-  root.classList.toggle('dark', isDark);
+  const c = p.colors;
+  root.style.setProperty('--color-app', c.app);
+  root.style.setProperty('--color-surface', c.surface);
+  root.style.setProperty('--color-surface2', c.surface2);
+  root.style.setProperty('--color-content', c.content);
+  root.style.setProperty('--color-muted', c.muted);
+  root.style.setProperty('--color-line', c.line);
+  root.style.setProperty('--color-accent', c.accent);
+  root.style.setProperty('--color-accent-hover', c.accentHover);
+  root.style.setProperty('--color-on-accent', c.onAccent);
   // Drives native form controls, scrollbars, and the default canvas color.
-  root.style.colorScheme = isDark ? 'dark' : 'light';
+  root.style.colorScheme = p.dark ? 'dark' : 'light';
+  root.dataset.palette = p.id;
 }
 
-/**
- * Apply a theme to the current document. For `'system'`, subscribes to OS
- * changes so the UI updates live; other modes detach the listener.
- */
-export function applyTheme(theme: Theme): void {
+/** Apply a palette by id. For 'system', keeps the OS preference in sync live. */
+export function applyPalette(id: string): void {
   if (systemListener && mql) {
     mql.removeEventListener('change', systemListener);
     systemListener = null;
   }
 
-  if (theme === 'system') {
-    const sync = (dark: boolean) => setDark(dark);
-    sync(!!mql?.matches);
-    if (mql) {
-      systemListener = (e) => sync(e.matches);
-      mql.addEventListener('change', systemListener);
-    }
-    return;
-  }
+  setVars(resolvePalette(id, !!mql?.matches));
 
-  setDark(theme === 'dark');
+  if (id === 'system' && mql) {
+    systemListener = (e) => setVars(resolvePalette('system', e.matches));
+    mql.addEventListener('change', systemListener);
+  }
 }
 
-/** Read the persisted theme and apply it. Call before mounting to avoid a flash. */
+/** Read the persisted palette and apply it. Call before mounting to avoid a flash. */
 export async function initTheme(): Promise<void> {
-  const { theme } = await getSettings();
-  applyTheme(theme);
+  const { palette } = await getSettings();
+  applyPalette(palette);
 }

@@ -9,9 +9,10 @@ import {
   clearCredentials,
   type Settings,
   type SummaryStyle,
-  type ReaderPrefs,
 } from '../../lib/settings';
-import { applyTheme } from '../../lib/theme';
+import { applyPalette } from '../../lib/theme';
+import { PALETTES } from '../../lib/palettes';
+import { renderMarkdown } from '../../lib/markdown';
 import { listModels } from '../../lib/api';
 import { captureActiveTab, type Article } from '../../lib/extract';
 import { streamChat, type ChatMessage } from '../../lib/chat';
@@ -121,7 +122,7 @@ async function updateSetting<K extends keyof Settings>(key: K, value: Settings[K
   if (!settings.value) return;
   settings.value = { ...settings.value, [key]: value };
   await setSettings({ [key]: value } as Partial<Settings>);
-  if (key === 'theme') applyTheme(value as Settings['theme']);
+  if (key === 'palette') applyPalette(value as string);
 }
 
 function newChat() {
@@ -303,10 +304,10 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 text-sm">
+  <div class="h-full flex flex-col bg-app text-content text-sm">
     <Onboarding v-if="view === 'onboarding'" @connected="onConnected" />
 
-    <div v-else-if="view === 'loading'" class="p-5 text-neutral-500">Loading…</div>
+    <div v-else-if="view === 'loading'" class="p-5 text-muted">Loading…</div>
 
     <SpeedReader
       v-else-if="view === 'reader'"
@@ -325,13 +326,13 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
 
     <template v-else>
       <!-- Header -->
-      <header class="flex items-center gap-2 px-3 py-2 border-b border-neutral-200 dark:border-neutral-800">
-        <div class="h-6 w-6 rounded bg-indigo-600 text-white grid place-items-center text-xs font-bold">ic</div>
+      <header class="flex items-center gap-2 px-3 py-2 border-b border-line">
+        <div class="h-6 w-6 rounded bg-accent text-on-accent grid place-items-center text-xs font-bold">ic</div>
         <span class="font-semibold flex-1 truncate">{{ article?.title || 'inference.club' }}</span>
-        <button class="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200" title="History" @click="view = 'history'">🕘</button>
-        <button class="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200" title="Re-extract" @click="capture">⟳</button>
+        <button class="text-muted hover:text-content" title="History" @click="view = 'history'">🕘</button>
+        <button class="text-muted hover:text-content" title="Re-extract" @click="capture">⟳</button>
         <button
-          class="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+          class="text-muted hover:text-content"
           title="Settings"
           @click="view === 'settings' ? (view = 'main') : openSettings()"
         >⚙</button>
@@ -343,7 +344,7 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
           <label class="block text-xs font-medium mb-1">Model</label>
           <select
             :value="settings?.model"
-            class="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1.5"
+            class="w-full rounded-md border border-line bg-transparent px-2 py-1.5"
             @change="updateSetting('model', ($event.target as HTMLSelectElement).value)"
           >
             <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
@@ -351,17 +352,41 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
           </select>
         </div>
 
-        <!-- Appearance -->
+        <!-- Appearance / palettes -->
         <div>
-          <label class="block text-xs font-medium mb-1">Appearance</label>
-          <div class="inline-flex rounded-md border border-neutral-300 dark:border-neutral-700 overflow-hidden">
+          <label class="block text-xs font-medium mb-2">Theme</label>
+          <button
+            class="w-full mb-2 rounded-md border px-3 py-1.5 text-left text-sm flex items-center gap-2"
+            :class="settings?.palette === 'system' ? 'border-accent bg-surface' : 'border-line hover:bg-surface'"
+            @click="updateSetting('palette', 'system')"
+          >
+            <span>🌗</span><span>Auto — match system</span>
+          </button>
+          <div class="grid grid-cols-2 gap-2">
             <button
-              v-for="t in (['system', 'light', 'dark'] as const)"
-              :key="t"
-              class="px-3 py-1.5 capitalize"
-              :class="settings?.theme === t ? 'bg-indigo-600 text-white' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800'"
-              @click="updateSetting('theme', t)"
-            >{{ t }}</button>
+              v-for="p in PALETTES"
+              :key="p.id"
+              class="rounded-lg border p-2 text-left transition"
+              :style="{
+                background: p.colors.app,
+                borderColor: settings?.palette === p.id ? p.colors.accent : p.colors.line,
+                boxShadow: settings?.palette === p.id ? `0 0 0 2px ${p.colors.accent}` : 'none',
+              }"
+              @click="updateSetting('palette', p.id)"
+            >
+              <div class="flex items-center gap-1 mb-1.5">
+                <span class="h-2.5 w-2.5 rounded-full" :style="{ background: p.colors.accent }"></span>
+                <span class="h-1.5 flex-1 rounded" :style="{ background: p.colors.line }"></span>
+              </div>
+              <div class="rounded p-1.5 mb-1.5" :style="{ background: p.colors.surface2 }">
+                <span class="block h-1.5 w-3/4 rounded mb-1" :style="{ background: p.colors.content }"></span>
+                <span class="block h-1.5 w-1/2 rounded" :style="{ background: p.colors.muted }"></span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-medium" :style="{ color: p.colors.content }">{{ p.name }}</span>
+                <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold" :style="{ background: p.colors.accent, color: p.colors.onAccent }">Aa</span>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -369,31 +394,32 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
         <label class="flex items-center gap-2">
           <input
             type="checkbox"
+            class="accent-accent"
             :checked="settings?.advancedMode"
             @change="updateSetting('advancedMode', ($event.target as HTMLInputElement).checked)"
           />
           <span class="text-xs font-medium">Advanced mode</span>
-          <span class="text-xs text-neutral-400">— show timings, tokens & page metadata</span>
+          <span class="text-xs text-muted">— show timings, tokens & page metadata</span>
         </label>
 
         <!-- Reader defaults -->
         <div class="space-y-2">
           <label class="block text-xs font-medium">Speed reader defaults</label>
           <div class="flex items-center gap-2 text-xs">
-            <span class="w-20 text-neutral-500">Speed</span>
-            <input type="range" min="100" max="900" step="25" :value="settings?.reader.wpm" class="flex-1 accent-indigo-600"
+            <span class="w-20 text-muted">Speed</span>
+            <input type="range" min="100" max="900" step="25" :value="settings?.reader.wpm" class="flex-1 accent-accent"
               @input="updateSetting('reader', { ...settings!.reader, wpm: Number(($event.target as HTMLInputElement).value) })" />
             <span class="w-14 text-right tabular-nums">{{ settings?.reader.wpm }} wpm</span>
           </div>
           <div class="flex items-center gap-2 text-xs">
-            <span class="w-20 text-neutral-500">Font size</span>
-            <input type="range" min="24" max="96" step="2" :value="settings?.reader.fontSizePx" class="flex-1 accent-indigo-600"
+            <span class="w-20 text-muted">Font size</span>
+            <input type="range" min="24" max="96" step="2" :value="settings?.reader.fontSizePx" class="flex-1 accent-accent"
               @input="updateSetting('reader', { ...settings!.reader, fontSizePx: Number(($event.target as HTMLInputElement).value) })" />
             <span class="w-14 text-right tabular-nums">{{ settings?.reader.fontSizePx }}px</span>
           </div>
           <div class="flex items-center gap-2 text-xs">
-            <span class="w-20 text-neutral-500">Context</span>
-            <input type="range" min="0" max="6" step="1" :value="settings?.reader.contextWords" class="flex-1 accent-indigo-600"
+            <span class="w-20 text-muted">Context</span>
+            <input type="range" min="0" max="6" step="1" :value="settings?.reader.contextWords" class="flex-1 accent-accent"
               @input="updateSetting('reader', { ...settings!.reader, contextWords: Number(($event.target as HTMLInputElement).value) })" />
             <span class="w-14 text-right tabular-nums">{{ settings?.reader.contextWords }} words</span>
           </div>
@@ -402,58 +428,58 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
         <!-- Data -->
         <div class="space-y-2">
           <label class="block text-xs font-medium">Data</label>
-          <p v-if="stats" class="text-xs text-neutral-500">
+          <p v-if="stats" class="text-xs text-muted">
             {{ stats.threads }} threads · {{ stats.messages }} messages · {{ bytesLabel(stats.bytes) }} stored
           </p>
         </div>
 
         <div class="flex gap-2">
-          <button class="rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800" @click="openSite">Open dashboard</button>
-          <button class="rounded-md border border-red-300 text-red-600 px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950" @click="disconnect">Disconnect</button>
+          <button class="rounded-md border border-line px-3 py-1.5 hover:bg-surface" @click="openSite">Open dashboard</button>
+          <button class="rounded-md border border-red-500/40 text-red-500 px-3 py-1.5 hover:bg-red-500/10" @click="disconnect">Disconnect</button>
         </div>
       </section>
 
       <!-- Main -->
       <template v-else>
-        <div class="px-3 py-2 text-xs text-neutral-500 flex items-center gap-2 border-b border-neutral-100 dark:border-neutral-800">
+        <div class="px-3 py-2 text-xs text-muted flex items-center gap-2 border-b border-line">
           <span v-if="article?.ok">{{ wordCount }} words</span>
           <span v-if="article?.byline" class="truncate">· {{ article.byline }}</span>
           <span class="ml-auto truncate">{{ settings?.model }}</span>
         </div>
 
         <!-- Actions -->
-        <div class="p-3 flex flex-wrap items-center gap-2 border-b border-neutral-100 dark:border-neutral-800">
+        <div class="p-3 flex flex-wrap items-center gap-2 border-b border-line">
           <button
-            class="rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3 py-1.5 font-medium"
+            class="rounded-md bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent px-3 py-1.5 font-medium"
             :disabled="!article?.ok || running"
             @click="summarize"
           >Summarize</button>
           <select
             :value="settings?.summaryStyle"
-            class="rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1.5 text-xs"
+            class="rounded-md border border-line bg-transparent px-2 py-1.5 text-xs"
             @change="updateSetting('summaryStyle', ($event.target as HTMLSelectElement).value as SummaryStyle)"
           >
             <option v-for="s in SUMMARY_STYLES" :key="s.value" :value="s.value">{{ s.label }}</option>
           </select>
           <button
-            class="rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800 disabled:opacity-50"
+            class="rounded-md border border-line px-3 py-1.5 text-xs hover:bg-surface disabled:opacity-50"
             :disabled="!article?.ok"
             title="Speed read the article"
             @click="readArticle"
           >⚡ Read</button>
           <button
             v-if="messages.length"
-            class="rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800"
+            class="rounded-md border border-line px-3 py-1.5 text-xs hover:bg-surface"
             @click="newChat"
           >New chat</button>
-          <button v-if="running" class="rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5" @click="stop">Stop</button>
+          <button v-if="running" class="rounded-md border border-line px-3 py-1.5" @click="stop">Stop</button>
         </div>
 
         <!-- Page details (advanced) -->
-        <details v-if="settings?.advancedMode && article?.ok" class="px-3 py-2 border-b border-neutral-100 dark:border-neutral-800 text-xs">
-          <summary class="cursor-pointer text-neutral-500">Page details</summary>
-          <dl class="mt-2 grid grid-cols-[7rem_1fr] gap-x-2 gap-y-1 text-neutral-500">
-            <dt>URL</dt><dd class="truncate text-neutral-700 dark:text-neutral-300">{{ article.url }}</dd>
+        <details v-if="settings?.advancedMode && article?.ok" class="px-3 py-2 border-b border-line text-xs">
+          <summary class="cursor-pointer text-muted">Page details</summary>
+          <dl class="mt-2 grid grid-cols-[7rem_1fr] gap-x-2 gap-y-1 text-muted">
+            <dt>URL</dt><dd class="truncate text-content">{{ article.url }}</dd>
             <dt>Site</dt><dd class="truncate">{{ article.siteName || '—' }}</dd>
             <dt>Lang / dir</dt><dd>{{ article.lang || '—' }} / {{ article.dir || '—' }}</dd>
             <dt>Published</dt><dd>{{ article.publishedTime || '—' }}</dd>
@@ -465,27 +491,30 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
 
         <!-- Thread -->
         <div ref="outputEl" class="flex-1 overflow-y-auto p-3 space-y-3">
-          <p v-if="error" class="text-red-600">{{ error }}</p>
-          <p v-if="!messages.length && !error" class="text-neutral-400">
+          <p v-if="error" class="text-red-500">{{ error }}</p>
+          <p v-if="!messages.length && !error" class="text-muted">
             Summarize the page, or ask a question below.
           </p>
 
           <div v-for="m in messages" :key="m.id">
             <!-- User -->
             <div v-if="m.role === 'user'" class="flex justify-end">
-              <div class="max-w-[85%] rounded-lg bg-indigo-600 text-white px-3 py-2 whitespace-pre-wrap">{{ m.content }}</div>
+              <div class="max-w-[85%] rounded-lg bg-accent text-on-accent px-3 py-2 whitespace-pre-wrap">{{ m.content }}</div>
             </div>
 
             <!-- Assistant -->
             <div v-else class="space-y-1">
-              <div class="rounded-lg bg-neutral-100 dark:bg-neutral-800 px-3 py-2 whitespace-pre-wrap leading-relaxed">{{ m.content || (running ? '…' : '') }}</div>
-              <div class="flex items-center gap-3 px-1 text-[11px] text-neutral-400">
-                <button class="hover:text-indigo-600" title="Speed read this answer" @click="openReader(m.content, 'AI response')">⚡ Speed read</button>
-                <button v-if="settings?.advancedMode" class="hover:text-neutral-700 dark:hover:text-neutral-200" @click="expanded[m.id] = !expanded[m.id]">
+              <div class="rounded-lg bg-surface2 px-3 py-2">
+                <div v-if="m.content" class="md" v-html="renderMarkdown(m.content)"></div>
+                <span v-else class="text-muted">…</span>
+              </div>
+              <div class="flex items-center gap-3 px-1 text-[11px] text-muted">
+                <button class="hover:text-accent" title="Speed read this answer" @click="openReader(m.content, 'AI response')">⚡ Speed read</button>
+                <button v-if="settings?.advancedMode" class="hover:text-content" @click="expanded[m.id] = !expanded[m.id]">
                   {{ expanded[m.id] ? 'Hide details' : 'Details' }}
                 </button>
               </div>
-              <dl v-if="settings?.advancedMode && expanded[m.id]" class="mx-1 mb-1 grid grid-cols-[7rem_1fr] gap-x-2 gap-y-1 text-[11px] text-neutral-500 bg-neutral-50 dark:bg-neutral-800/50 rounded p-2">
+              <dl v-if="settings?.advancedMode && expanded[m.id]" class="mx-1 mb-1 grid grid-cols-[7rem_1fr] gap-x-2 gap-y-1 text-[11px] text-muted bg-surface2 rounded p-2">
                 <dt>Model</dt><dd class="truncate">{{ m.meta?.model || '—' }}</dd>
                 <dt>Action</dt><dd>{{ m.meta?.kind }}{{ m.meta?.summaryStyle ? ` · ${m.meta.summaryStyle}` : '' }}</dd>
                 <dt>First token</dt><dd>{{ ms(m.meta?.msToFirstToken) }}</dd>
@@ -499,16 +528,16 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
         </div>
 
         <!-- Ask -->
-        <div class="p-3 border-t border-neutral-200 dark:border-neutral-800 flex gap-2">
+        <div class="p-3 border-t border-line flex gap-2">
           <input
             v-model="question"
             placeholder="Ask about this page…"
-            class="flex-1 rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-2"
+            class="flex-1 rounded-md border border-line bg-transparent px-3 py-2"
             :disabled="!article?.ok || running"
             @keydown.enter="ask"
           />
           <button
-            class="rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3 py-2"
+            class="rounded-md bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent px-3 py-2"
             :disabled="!article?.ok || running || !question.trim()"
             @click="ask"
           >Ask</button>

@@ -15,11 +15,14 @@
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
+    "dompurify": "^3.4.11",
+    "marked": "^18.0.5",
     "vue": "^3.5.38"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
     "@types/chrome": "^0.2.0",
+    "@types/dompurify": "^3.0.5",
     "@wxt-dev/module-vue": "^1.0.3",
     "tailwindcss": "^4.3.1",
     "typescript": "^5.7.0",

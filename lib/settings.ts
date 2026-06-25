@@ -2,8 +2,6 @@
 // Stored in chrome.storage.local (NOT sync) so the API token never traverses
 // Google account sync.
 
-export type Theme = 'system' | 'light' | 'dark';
-
 export interface ReaderPrefs {
   wpm: number; // words per minute
   fontSizePx: number; // focus-word size
@@ -18,7 +16,7 @@ export interface Settings {
   token: string;
   model: string;
   summaryStyle: SummaryStyle;
-  theme: Theme;
+  palette: string; // palette id (see lib/palettes.ts), or 'system'
   advancedMode: boolean;
   reader: ReaderPrefs;
 }
@@ -30,7 +28,7 @@ export const DEFAULTS: Settings = {
   token: '',
   model: '',
   summaryStyle: 'bullets',
-  theme: 'system',
+  palette: 'midnight',
   advancedMode: false,
   reader: {
     wpm: 350,
@@ -43,12 +41,18 @@ export const DEFAULTS: Settings = {
 };
 
 export async function getSettings(): Promise<Settings> {
-  const stored = await chrome.storage.local.get(DEFAULTS as unknown as Record<string, unknown>);
+  const stored = (await chrome.storage.local.get(
+    DEFAULTS as unknown as Record<string, unknown>,
+  )) as Partial<Settings> & { theme?: string };
+  // Migrate the pre-palette `theme` field (system/light/dark) to a palette.
+  if (!stored.palette && stored.theme) {
+    stored.palette = stored.theme === 'light' ? 'daylight' : stored.theme === 'dark' ? 'midnight' : 'system';
+  }
   // Deep-merge `reader` so new nested prefs pick up defaults for older installs.
   return {
     ...DEFAULTS,
     ...stored,
-    reader: { ...DEFAULTS.reader, ...(stored as Partial<Settings>).reader },
+    reader: { ...DEFAULTS.reader, ...stored.reader },
   } as Settings;
 }
 

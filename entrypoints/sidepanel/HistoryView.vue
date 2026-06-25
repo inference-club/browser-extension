@@ -64,60 +64,60 @@ async function wipe() {
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
-    <header class="flex items-center gap-2 px-3 py-2 border-b border-neutral-200 dark:border-neutral-800">
+  <div class="h-full flex flex-col bg-app text-content">
+    <header class="flex items-center gap-2 px-3 py-2 border-b border-line">
       <button
-        class="rounded-md border border-neutral-300 dark:border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-800"
+        class="rounded-md border border-line px-2 py-1 text-xs hover:bg-surface"
         @click="emit('exit')"
       >← Back</button>
       <span class="font-semibold flex-1 text-sm">History</span>
       <button
         v-if="conversations.length"
-        class="text-xs text-red-600 hover:underline"
+        class="text-xs text-red-500 hover:underline"
         @click="wipe"
       >Clear all</button>
     </header>
 
-    <div class="p-3 border-b border-neutral-100 dark:border-neutral-800">
+    <div class="p-3 border-b border-line">
       <input
         v-model="filter"
         placeholder="Filter by site, title, or text…"
-        class="w-full rounded-md border border-neutral-300 dark:border-neutral-700 bg-transparent px-3 py-1.5 text-sm"
+        class="w-full rounded-md border border-line bg-transparent px-3 py-1.5 text-sm"
       />
     </div>
 
     <div class="flex-1 overflow-y-auto">
-      <p v-if="!groups.length" class="p-5 text-neutral-400 text-sm">
+      <p v-if="!groups.length" class="p-5 text-muted text-sm">
         {{ conversations.length ? 'No threads match your filter.' : 'No saved chats yet. Summarize or ask about a page to start a thread.' }}
       </p>
 
-      <div v-for="g in groups" :key="g.host" class="border-b border-neutral-100 dark:border-neutral-800">
+      <div v-for="g in groups" :key="g.host" class="border-b border-line">
         <button
-          class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-neutral-50 dark:hover:bg-neutral-800"
+          class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-surface"
           @click="collapsed[g.host] = !collapsed[g.host]"
         >
-          <span class="text-neutral-400 text-xs w-3">{{ collapsed[g.host] ? '▸' : '▾' }}</span>
+          <span class="text-muted text-xs w-3">{{ collapsed[g.host] ? '▸' : '▾' }}</span>
           <span class="font-medium text-sm truncate flex-1">{{ g.host }}</span>
-          <span class="text-xs text-neutral-400">{{ g.items.length }}</span>
+          <span class="text-xs text-muted">{{ g.items.length }}</span>
         </button>
 
         <ul v-show="!collapsed[g.host]">
           <li
             v-for="c in g.items"
             :key="c.id"
-            class="px-3 py-2 pl-8 border-t border-neutral-50 dark:border-neutral-800/50 hover:bg-neutral-50 dark:hover:bg-neutral-800/60"
+            class="px-3 py-2 pl-8 border-t border-line hover:bg-surface"
           >
             <div class="flex items-start gap-2">
               <button class="flex-1 text-left min-w-0" @click="emit('open', c.id)">
                 <div class="text-sm font-medium truncate">{{ c.title }}</div>
-                <div class="text-xs text-neutral-500 truncate">{{ snippet(c) }}</div>
-                <div class="text-[11px] text-neutral-400 mt-0.5">
+                <div class="text-xs text-muted truncate">{{ snippet(c) }}</div>
+                <div class="text-[11px] text-muted mt-0.5">
                   {{ when(c.updatedAt) }} · {{ c.messages.length }} msg
                 </div>
               </button>
               <div class="flex flex-col gap-1 shrink-0">
-                <button class="text-neutral-400 hover:text-indigo-600" title="Open source page" @click="openPage(c.url)">↗</button>
-                <button class="text-neutral-400 hover:text-red-600" title="Delete thread" @click="remove(c.id)">✕</button>
+                <button class="text-muted hover:text-accent" title="Open source page" @click="openPage(c.url)">↗</button>
+                <button class="text-muted hover:text-red-500" title="Delete thread" @click="remove(c.id)">✕</button>
               </div>
             </div>
           </li>

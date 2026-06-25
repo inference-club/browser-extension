@@ -1,15 +1,76 @@
 @import "tailwindcss";
 
-/* Class-based dark mode: `dark:` utilities respond to a `.dark` class on <html>
-   (set by lib/theme.ts) rather than only the OS preference. */
-@custom-variant dark (&:where(.dark, .dark *));
+/* Semantic color tokens. These defaults are the "Daylight" palette and also
+   register the Tailwind utilities (bg-app, text-content, bg-accent, …). At
+   runtime lib/theme.ts overrides these custom properties on <html> with the
+   chosen palette's values, so every utility re-themes instantly. */
+@theme {
+  --color-app: #ffffff;
+  --color-surface: #f5f6f8;
+  --color-surface2: #eceef2;
+  --color-content: #1f2430;
+  --color-muted: #6b7280;
+  --color-line: #e2e5ea;
+  --color-accent: #4f46e5;
+  --color-accent-hover: #6366f1;
+  --color-on-accent: #ffffff;
+}
 
 html,
 body {
   margin: 0;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-app);
+  color: var(--color-content);
 }
 
 #app {
   height: 100vh;
 }
+
+/* Rendered-markdown styling for AI responses (see lib/markdown.ts). */
+.md {
+  line-height: 1.6;
+  word-break: break-word;
+}
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4 { font-weight: 600; line-height: 1.3; margin: 1em 0 0.4em; }
+.md h1 { font-size: 1.3em; }
+.md h2 { font-size: 1.18em; }
+.md h3 { font-size: 1.06em; }
+.md h4 { font-size: 1em; }
+.md p { margin: 0.5em 0; }
+.md ul, .md ol { margin: 0.5em 0; padding-left: 1.4em; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md li { margin: 0.2em 0; }
+.md li > ul, .md li > ol { margin: 0.2em 0; }
+.md a { color: var(--color-accent); text-decoration: underline; }
+.md strong { font-weight: 600; }
+.md em { font-style: italic; }
+.md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: color-mix(in oklab, var(--color-content) 12%, transparent);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+.md pre {
+  background: color-mix(in oklab, var(--color-content) 10%, transparent);
+  padding: 0.7em 0.8em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.6em 0;
+}
+.md pre code { background: none; padding: 0; font-size: 0.85em; }
+.md blockquote {
+  border-left: 3px solid var(--color-line);
+  padding-left: 0.8em;
+  margin: 0.6em 0;
+  color: var(--color-muted);
+}
+.md hr { border: none; border-top: 1px solid var(--color-line); margin: 1em 0; }
+.md table { border-collapse: collapse; margin: 0.6em 0; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--color-line); padding: 0.35em 0.6em; text-align: left; }
+.md th { background: color-mix(in oklab, var(--color-content) 8%, transparent); font-weight: 600; }
