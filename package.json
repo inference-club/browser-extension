@@ -2,7 +2,7 @@
   "name": "inference-club-extension",
   "description": "inference.club reading copilot — summarize, ask, research, narrate and illustrate any web page using your own cluster.",
   "private": true,
-  "version": "0.0.5",
+  "version": "0.0.6",
   "type": "module",
   "scripts": {
     "dev": "wxt",

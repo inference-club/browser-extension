@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import Onboarding from './Onboarding.vue';
 import SpeedReader from './SpeedReader.vue';
 import HistoryView from './HistoryView.vue';
@@ -51,13 +51,61 @@ const readerTitle = ref('');
 const outputEl = ref<HTMLElement | null>(null);
 let abort: AbortController | null = null;
 
+// Auto-follow the active tab: re-read the page when the user switches tabs or
+// the active tab navigates. (Requires broad host permissions; see wxt.config.)
+let myWindowId: number | undefined;
+let refreshTimer: number | null = null;
+
 const messages = computed(() => conv.value?.messages ?? []);
 const wordCount = computed(() =>
   article.value?.text ? article.value.text.trim().split(/\s+/).length : 0,
 );
 const truncated = computed(() => (article.value?.text?.length ?? 0) > MAX_CHARS);
 
-onMounted(init);
+onMounted(async () => {
+  await init();
+  await setupTabFollowing();
+});
+onUnmounted(teardownTabFollowing);
+
+async function setupTabFollowing() {
+  try {
+    myWindowId = (await chrome.windows.getCurrent()).id;
+  } catch {
+    /* ignore */
+  }
+  chrome.tabs.onActivated.addListener(onTabActivated);
+  chrome.tabs.onUpdated.addListener(onTabUpdated);
+}
+
+function teardownTabFollowing() {
+  chrome.tabs.onActivated.removeListener(onTabActivated);
+  chrome.tabs.onUpdated.removeListener(onTabUpdated);
+  if (refreshTimer != null) clearTimeout(refreshTimer);
+}
+
+function onTabActivated(info: chrome.tabs.OnActivatedInfo) {
+  if (myWindowId != null && info.windowId !== myWindowId) return;
+  scheduleRefresh();
+}
+
+function onTabUpdated(_id: number, change: chrome.tabs.OnUpdatedInfo, tab: chrome.tabs.Tab) {
+  // Only react when the active tab in our window finishes loading a page.
+  if (change.status !== 'complete' || !tab.active) return;
+  if (myWindowId != null && tab.windowId !== myWindowId) return;
+  scheduleRefresh();
+}
+
+// Coalesce bursts of events, and don't disrupt an in-progress stream or a
+// view the user is actively reading (settings/history/reader).
+function scheduleRefresh() {
+  if (running.value || view.value !== 'main') return;
+  if (refreshTimer != null) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    if (!running.value && view.value === 'main') capture();
+  }, 150) as unknown as number;
+}
 
 async function init() {
   settings.value = await getSettings();
@@ -330,12 +378,12 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
         <div class="h-6 w-6 rounded bg-accent text-on-accent grid place-items-center text-xs font-bold">ic</div>
         <span class="font-semibold flex-1 truncate">{{ article?.title || 'inference.club' }}</span>
         <button class="text-muted hover:text-content" title="History" @click="view = 'history'">🕘</button>
-        <button class="text-muted hover:text-content" title="Re-extract" @click="capture">⟳</button>
+        <button class="text-muted hover:text-content" title="Re-extract" @click="capture">🔄</button>
         <button
           class="text-muted hover:text-content"
           title="Settings"
           @click="view === 'settings' ? (view = 'main') : openSettings()"
-        >⚙</button>
+        >⚙️</button>
       </header>
 
       <!-- Settings -->

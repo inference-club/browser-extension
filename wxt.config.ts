@@ -11,18 +11,11 @@ export default defineConfig({
     name: 'inference.club',
     description:
       'Summarize, ask, research, narrate and illustrate the page you are reading — using your own inference.club cluster.',
-    // `activeTab` + `scripting` let us read the current tab ONLY on a user
-    // gesture (no broad host permissions). `contextMenus` returns in V1.
     permissions: ['activeTab', 'scripting', 'storage', 'sidePanel'],
-    // Extension-context fetches (side panel) to these hosts bypass CORS thanks
-    // to host_permissions — no server change needed. The API lives on the
-    // `api.` subdomain; localhost (any port) covers local dev.
-    host_permissions: [
-      'https://api.inference.club/*',
-      'https://inference.club/*',
-      'http://localhost/*',
-      'http://127.0.0.1/*',
-    ],
+    // Broad host permissions so the side panel can read whatever tab you switch
+    // to (auto-follow), inject the extractor on demand, and fetch the API
+    // without CORS issues. This is the "read your data on all websites" grant.
+    host_permissions: ['https://*/*', 'http://*/*'],
     action: {
       default_title: 'inference.club',
     },
