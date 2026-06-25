@@ -1,6 +1,6 @@
 # Privacy Policy — inference.club browser extension
 
-_Last updated: 2026-06-24_
+_Last updated: 2026-06-25_
 
 The inference.club browser extension ("the extension") is a client for your own
 inference.club account. This policy explains what it does with your data. In short:
@@ -12,21 +12,28 @@ only to the inference.club account you configure.**
 Locally on your device, via the browser's extension storage:
 
 - Your inference.club **API token**.
-- Your inference.club **base URL** (default `https://inference.club`).
-- UI **preferences** (e.g. selected model, summary style).
+- Your inference.club **base URL** (default `https://api.inference.club`).
+- UI **preferences** — selected model, summary style, color palette/theme,
+  advanced-mode toggle, and speed-reader settings.
+- **Chat history** — the conversations you have (summaries and questions/answers),
+  saved per page URL so you can resume and browse them later.
 
 This information stays on your device. It is not synced to any account and is not
-transmitted anywhere except as described below. You can clear it at any time with the
-"Disconnect" button in the extension, or by removing the extension.
+transmitted anywhere except as described below. You can delete your chat history from
+the extension's History view (per-thread or "Clear all"), clear your credentials with
+the "Disconnect" button, or remove everything by uninstalling the extension.
 
-## What the extension sends, and where
+## What the extension reads, sends, and where
 
-When — and only when — you click an action (e.g. "Summarize" or "Ask"), the extension:
+While the side panel is open, the extension reads the **readable text of the tab you
+are currently viewing** (extracted locally in your browser using Mozilla Readability),
+and re-reads it automatically when you switch tabs or navigate — so the panel reflects
+the page in front of you. This reading and extraction happens entirely on your device.
 
-1. Reads the readable text of the page you are currently viewing (extracted locally in
-   your browser).
-2. Sends that text, along with your prompt, to the inference.club server at the base
-   URL you configured, authenticated with your API token, over HTTPS.
+Your page text and prompts are **sent over the network only when you take an action**
+(e.g. "Summarize" or "Ask"). At that point the extension sends the extracted text and
+your prompt to the inference.club server at the base URL you configured, authenticated
+with your API token, over HTTPS.
 
 That inference.club server is the only network destination the extension contacts. The
 extension does not send your data to the extension's authors, to analytics services,
@@ -37,20 +44,24 @@ governed by inference.club's own terms and privacy practices.
 
 ## What the extension does not do
 
-- It does not run in the background or read pages you have not asked it to act on.
-- It does not modify the pages you visit.
+- It does nothing when the side panel is closed; it does not run in the background
+  reading your browsing.
+- It does not modify the pages you visit (extraction is read-only).
+- It does not transmit any page content until you click an action.
 - It contains no analytics, telemetry, advertising, or third-party trackers.
 - It does not sell or share your data with anyone.
 
 ## Permissions
 
-- **activeTab** + **scripting** — read the page you are actively viewing, only after you
-  invoke the extension, by injecting a read-only extraction script into that one tab.
-  The extension requests no access to other sites.
-- **storage** — save your token, base URL, and preferences locally.
+- **Host access (all sites)** — so the side panel can read the article text of whatever
+  tab you are viewing and follow you as you switch tabs, the extension requests access
+  to all websites. Page text is only used to populate the panel and is only sent to your
+  configured inference.club origin when you act on it.
+- **scripting** — used to inject a small, read-only extraction script into the page you
+  are viewing to pull out its readable article text.
+- **activeTab** — access to the current tab on invocation.
+- **storage** — save your token, base URL, preferences, and chat history locally.
 - **sidePanel** — show the extension's interface beside the page.
-- **Host access** — limited to your configured inference.club origin, where requests are
-  sent.
 
 ## Contact
 
