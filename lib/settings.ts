@@ -18,6 +18,7 @@ export interface Settings {
   summaryStyle: SummaryStyle;
   palette: string; // palette id (see lib/palettes.ts), or 'system'
   advancedMode: boolean;
+  stream: boolean; // stream responses token-by-token vs. show the full reply at once
   reader: ReaderPrefs;
 }
 
@@ -30,6 +31,7 @@ export const DEFAULTS: Settings = {
   summaryStyle: 'bullets',
   palette: 'midnight',
   advancedMode: false,
+  stream: true,
   reader: {
     wpm: 350,
     fontSizePx: 48,

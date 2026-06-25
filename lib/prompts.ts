@@ -2,7 +2,7 @@
 // easy to tune without touching UI or transport code.
 
 import type { Article } from './extract';
-import type { ChatMessage } from './chat';
+import type { ChatMessage, MessageContent } from './chat';
 import type { SummaryStyle } from './settings';
 
 // Cap article text so we stay within typical context windows. The cluster's
@@ -47,13 +47,21 @@ export function askMessages(
   article: Article,
   question: string,
   history: ChatMessage[],
+  images: string[] = [],
 ): ChatMessage[] {
+  // When images are attached, send multimodal content (text + image_url parts).
+  const userContent: MessageContent = images.length
+    ? [
+        { type: 'text', text: question },
+        ...images.map((url) => ({ type: 'image_url' as const, image_url: { url } })),
+      ]
+    : question;
   return [
     {
       role: 'system',
-      content: `You are a reading assistant answering questions about the article below. Prefer the article; if you must go beyond it, say so.\n\n${articleBlock(article)}`,
+      content: `You are a reading assistant answering questions about the article below. Prefer the article; if you must go beyond it, say so. The user may attach images from the page — consider them when relevant.\n\n${articleBlock(article)}`,
     },
     ...history,
-    { role: 'user', content: question },
+    { role: 'user', content: userContent },
   ];
 }

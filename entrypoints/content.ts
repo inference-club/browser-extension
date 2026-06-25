@@ -18,6 +18,8 @@ export default defineContentScript({
         sendResponse(extractArticle());
       } else if (msg?.type === 'GET_SELECTION') {
         sendResponse({ text: window.getSelection()?.toString() ?? '' });
+      } else if (msg?.type === 'LIST_IMAGES') {
+        sendResponse({ ok: true, images: listImages() });
       }
       return false; // synchronous response
     });
@@ -47,4 +49,20 @@ function extractArticle() {
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+// Collect meaningful images on the page (skip tiny icons/spacers, dedupe by src).
+function listImages() {
+  const seen = new Set<string>();
+  const out: { src: string; alt: string; w: number; h: number }[] = [];
+  for (const img of Array.from(document.images)) {
+    const src = img.currentSrc || img.src;
+    if (!src || src.startsWith('data:image/svg')) continue;
+    if (img.naturalWidth < 64 || img.naturalHeight < 64) continue;
+    if (seen.has(src)) continue;
+    seen.add(src);
+    out.push({ src, alt: img.alt || '', w: img.naturalWidth, h: img.naturalHeight });
+    if (out.length >= 60) break;
+  }
+  return out;
 }

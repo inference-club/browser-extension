@@ -15,6 +15,7 @@ export interface MessageMeta {
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   requestChars?: number;
   truncated?: boolean;
+  systemPrompt?: string; // captured (advanced mode only) so the user can inspect context sent
 }
 
 export interface StoredMessage {
@@ -22,6 +23,7 @@ export interface StoredMessage {
   role: 'user' | 'assistant';
   content: string;
   ts: number;
+  images?: string[]; // attached image data URLs (user messages)
   meta?: MessageMeta;
 }
 

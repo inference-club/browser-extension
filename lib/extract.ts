@@ -42,6 +42,26 @@ export async function captureActiveTab(): Promise<Article> {
   }
 }
 
+export interface PageImage {
+  src: string;
+  alt: string;
+  w: number;
+  h: number;
+}
+
+// List meaningful images on the active page (for the attach-image picker).
+export async function listPageImages(): Promise<PageImage[]> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) return [];
+  try {
+    await ensureInjected(tab.id);
+    const res = await chrome.tabs.sendMessage(tab.id, { type: 'LIST_IMAGES' });
+    return (res?.images as PageImage[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function captureSelection(): Promise<string> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) return '';

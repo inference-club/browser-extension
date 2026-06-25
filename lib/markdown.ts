@@ -7,8 +7,20 @@ import DOMPurify from 'dompurify';
 
 marked.setOptions({ gfm: true, breaks: true });
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export function renderMarkdown(src: string): string {
   if (!src) return '';
-  const html = marked.parse(src, { async: false }) as string;
-  return DOMPurify.sanitize(html);
+  try {
+    const html = marked.parse(src, { async: false }) as string;
+    return DOMPurify.sanitize(html);
+  } catch {
+    // Never let a parse error (e.g. on partial input) break rendering.
+    return `<p>${escapeHtml(src)}</p>`;
+  }
 }

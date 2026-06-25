@@ -2,9 +2,15 @@
 
 import { apiFetch } from './api';
 
+// Message content is either plain text or, for vision input, an array of parts
+// (OpenAI-compatible multimodal format).
+export type TextPart = { type: 'text'; text: string };
+export type ImagePart = { type: 'image_url'; image_url: { url: string } };
+export type MessageContent = string | Array<TextPart | ImagePart>;
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: MessageContent;
 }
 
 export interface Usage {
@@ -78,4 +84,28 @@ export async function* streamChat(opts: {
       }
     }
   }
+}
+
+// Non-streaming completion: returns the whole reply at once. Used when the user
+// turns streaming off in settings.
+export async function completeChat(opts: {
+  model: string;
+  messages: ChatMessage[];
+  signal?: AbortSignal;
+}): Promise<{ content: string; finishReason?: string; usage?: Usage }> {
+  const res = await apiFetch('/v1/chat/completions', {
+    method: 'POST',
+    body: JSON.stringify({ model: opts.model, messages: opts.messages, stream: false }),
+    signal: opts.signal,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`chat/completions → ${res.status} ${text.slice(0, 300)}`);
+  }
+  const json = await res.json();
+  return {
+    content: json?.choices?.[0]?.message?.content ?? '',
+    finishReason: json?.choices?.[0]?.finish_reason,
+    usage: json?.usage as Usage | undefined,
+  };
 }

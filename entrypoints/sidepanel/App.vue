@@ -14,8 +14,9 @@ import { applyPalette } from '../../lib/theme';
 import { PALETTES } from '../../lib/palettes';
 import { renderMarkdown } from '../../lib/markdown';
 import { listModels } from '../../lib/api';
-import { captureActiveTab, type Article } from '../../lib/extract';
-import { streamChat, type ChatMessage } from '../../lib/chat';
+import { captureActiveTab, listPageImages, type Article, type PageImage } from '../../lib/extract';
+import { streamChat, completeChat, type ChatMessage, type MessageContent } from '../../lib/chat';
+import { toDataUrl } from '../../lib/images';
 import { summarizeMessages, askMessages, SUMMARY_STYLES, MAX_CHARS } from '../../lib/prompts';
 import {
   type Conversation,
@@ -43,6 +44,15 @@ const question = ref('');
 const models = ref<string[]>([]);
 const expanded = ref<Record<string, boolean>>({}); // advanced meta toggles per message
 const stats = ref<{ bytes: number; threads: number; messages: number } | null>(null);
+const streamingId = ref<string | null>(null); // id of the message currently streaming
+
+// Image attachments.
+const attachments = ref<string[]>([]); // data URLs queued for the next message
+const showImagePicker = ref(false);
+const pageImages = ref<PageImage[]>([]);
+const loadingImages = ref(false);
+const picked = ref<Set<string>>(new Set()); // selected srcs in the picker
+const attaching = ref(false);
 
 // Speed reader source.
 const readerText = ref('');
@@ -211,7 +221,9 @@ async function runCompletion(
   running.value = true;
   abort = new AbortController();
 
-  const requestChars = reqMessages.reduce((n, m) => n + m.content.length, 0);
+  const requestChars = reqMessages.reduce((n, m) => n + contentChars(m.content), 0);
+  // The system message carries the article context; capture it for advanced mode.
+  const sys = reqMessages.find((m) => m.role === 'system');
   const assistant: StoredMessage = {
     id: newId(),
     role: 'assistant',
@@ -223,9 +235,11 @@ async function runCompletion(
       summaryStyle: meta.summaryStyle,
       requestChars,
       truncated: truncated.value,
+      systemPrompt: settings.value.advancedMode && sys ? contentText(sys.content) : undefined,
     },
   };
   conv.value.messages.push(assistant);
+  streamingId.value = assistant.id;
   scrollToBottom();
 
   const start = performance.now();
@@ -235,17 +249,29 @@ async function runCompletion(
   let aborted = false;
 
   try {
-    for await (const chunk of streamChat({
-      model: settings.value.model,
-      messages: reqMessages,
-      signal: abort.signal,
-    })) {
-      if (chunk.delta) {
-        if (firstAt === undefined) firstAt = performance.now() - start;
-        assistant.content += chunk.delta;
+    if (settings.value.stream) {
+      for await (const chunk of streamChat({
+        model: settings.value.model,
+        messages: reqMessages,
+        signal: abort.signal,
+      })) {
+        if (chunk.delta) {
+          if (firstAt === undefined) firstAt = performance.now() - start;
+          assistant.content += chunk.delta;
+        }
+        if (chunk.finishReason) finishReason = chunk.finishReason;
+        if (chunk.usage) usage = chunk.usage;
       }
-      if (chunk.finishReason) finishReason = chunk.finishReason;
-      if (chunk.usage) usage = chunk.usage;
+    } else {
+      const r = await completeChat({
+        model: settings.value.model,
+        messages: reqMessages,
+        signal: abort.signal,
+      });
+      assistant.content = r.content;
+      firstAt = performance.now() - start;
+      finishReason = r.finishReason;
+      usage = r.usage;
     }
   } catch (e) {
     if ((e as Error).name === 'AbortError') aborted = true;
@@ -253,6 +279,7 @@ async function runCompletion(
   } finally {
     running.value = false;
     abort = null;
+    streamingId.value = null;
     assistant.meta = {
       ...assistant.meta,
       msToFirstToken: firstAt,
@@ -264,6 +291,18 @@ async function runCompletion(
     await upsertConversation(JSON.parse(JSON.stringify(conv.value)));
     scrollToBottom();
   }
+}
+
+// Character count + plain text of a message's content (string or multimodal).
+function contentChars(c: MessageContent): number {
+  return typeof c === 'string'
+    ? c.length
+    : c.reduce((n, p) => n + (p.type === 'text' ? p.text.length : 0), 0);
+}
+function contentText(c: MessageContent): string {
+  return typeof c === 'string'
+    ? c
+    : c.filter((p) => p.type === 'text').map((p) => (p as { text: string }).text).join('\n');
 }
 
 function summarize() {
@@ -281,17 +320,60 @@ function summarize() {
 }
 
 function ask() {
-  if (!article.value?.ok || running.value || !question.value.trim()) return;
+  if (!article.value?.ok || running.value) return;
   const q = question.value.trim();
+  const images = attachments.value.slice();
+  if (!q && !images.length) return;
   question.value = '';
+  attachments.value = [];
   // Multi-turn: prior thread turns become history (capped to bound tokens).
+  // History is text-only to keep payloads bounded; images go with the new turn.
   const history: ChatMessage[] = messages.value
     .filter((m) => m.content)
     .slice(-20)
     .map((m) => ({ role: m.role, content: m.content }));
-  conv.value?.messages.push({ id: newId(), role: 'user', content: q, ts: Date.now() });
+  conv.value?.messages.push({
+    id: newId(),
+    role: 'user',
+    content: q,
+    images: images.length ? images : undefined,
+    ts: Date.now(),
+  });
   scrollToBottom();
-  runCompletion(askMessages(article.value, q, history), { kind: 'ask' });
+  runCompletion(askMessages(article.value, q, history, images), { kind: 'ask' });
+}
+
+// ── Image attachments ──────────────────────────────────────────────────────
+async function openImagePicker() {
+  showImagePicker.value = true;
+  picked.value = new Set();
+  loadingImages.value = true;
+  try {
+    pageImages.value = await listPageImages();
+  } finally {
+    loadingImages.value = false;
+  }
+}
+
+function togglePick(src: string) {
+  const next = new Set(picked.value);
+  next.has(src) ? next.delete(src) : next.add(src);
+  picked.value = next;
+}
+
+async function confirmAttach() {
+  attaching.value = true;
+  try {
+    const urls = await Promise.all([...picked.value].map((src) => toDataUrl(src)));
+    for (const u of urls) if (u) attachments.value.push(u);
+  } finally {
+    attaching.value = false;
+    showImagePicker.value = false;
+  }
+}
+
+function removeAttachment(i: number) {
+  attachments.value.splice(i, 1);
 }
 
 function openReader(text: string, title: string) {
@@ -352,7 +434,7 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
 </script>
 
 <template>
-  <div class="h-full flex flex-col bg-app text-content text-sm">
+  <div class="relative h-full flex flex-col bg-app text-content text-sm">
     <Onboarding v-if="view === 'onboarding'" @connected="onConnected" />
 
     <div v-else-if="view === 'loading'" class="p-5 text-muted">Loading…</div>
@@ -438,6 +520,18 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
           </div>
         </div>
 
+        <!-- Stream responses -->
+        <label class="flex items-center gap-2">
+          <input
+            type="checkbox"
+            class="accent-accent"
+            :checked="settings?.stream"
+            @change="updateSetting('stream', ($event.target as HTMLInputElement).checked)"
+          />
+          <span class="text-xs font-medium">Stream responses</span>
+          <span class="text-xs text-muted">— show text as it's generated</span>
+        </label>
+
         <!-- Advanced mode -->
         <label class="flex items-center gap-2">
           <input
@@ -447,7 +541,7 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
             @change="updateSetting('advancedMode', ($event.target as HTMLInputElement).checked)"
           />
           <span class="text-xs font-medium">Advanced mode</span>
-          <span class="text-xs text-muted">— show timings, tokens & page metadata</span>
+          <span class="text-xs text-muted">— show timings, tokens, context & page metadata</span>
         </label>
 
         <!-- Reader defaults -->
@@ -547,13 +641,20 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
           <div v-for="m in messages" :key="m.id">
             <!-- User -->
             <div v-if="m.role === 'user'" class="flex justify-end">
-              <div class="max-w-[85%] rounded-lg bg-accent text-on-accent px-3 py-2 whitespace-pre-wrap">{{ m.content }}</div>
+              <div class="max-w-[85%] rounded-lg bg-accent text-on-accent px-3 py-2">
+                <div v-if="m.images?.length" class="flex flex-wrap gap-1 mb-1.5">
+                  <img v-for="(src, i) in m.images" :key="i" :src="src" class="h-16 w-16 object-cover rounded border border-white/20" />
+                </div>
+                <div v-if="m.content" class="whitespace-pre-wrap">{{ m.content }}</div>
+              </div>
             </div>
 
             <!-- Assistant -->
             <div v-else class="space-y-1">
               <div class="rounded-lg bg-surface2 px-3 py-2">
-                <div v-if="m.content" class="md" v-html="renderMarkdown(m.content)"></div>
+                <!-- Stream as plain text; render markdown once complete. -->
+                <div v-if="m.id === streamingId" class="whitespace-pre-wrap">{{ m.content }}<span v-if="!m.content" class="text-muted">…</span></div>
+                <div v-else-if="m.content" class="md" v-html="renderMarkdown(m.content)"></div>
                 <span v-else class="text-muted">…</span>
               </div>
               <div class="flex items-center gap-3 px-1 text-[11px] text-muted">
@@ -571,26 +672,94 @@ watch(() => messages.value.at(-1)?.content, scrollToBottom);
                 <dt>Request</dt><dd>{{ m.meta?.requestChars ?? '—' }} chars{{ m.meta?.truncated ? ' · truncated' : '' }}</dd>
                 <dt>Finish</dt><dd>{{ m.meta?.finishReason || '—' }}</dd>
               </dl>
+
+              <!-- System prompt / context sent to the model (collapsed) -->
+              <details
+                v-if="settings?.advancedMode && expanded[m.id] && m.meta?.systemPrompt"
+                class="mx-1 mb-1 rounded border border-dashed border-line bg-surface2/50"
+              >
+                <summary class="cursor-pointer px-2 py-1 text-[11px] font-medium text-muted select-none">
+                  📋 Context sent to the model (system prompt) · {{ m.meta.systemPrompt.length }} chars
+                </summary>
+                <pre class="max-h-64 overflow-auto px-2 py-2 text-[11px] whitespace-pre-wrap font-mono text-muted border-t border-line">{{ m.meta.systemPrompt }}</pre>
+              </details>
             </div>
           </div>
         </div>
 
         <!-- Ask -->
-        <div class="p-3 border-t border-line flex gap-2">
-          <input
-            v-model="question"
-            placeholder="Ask about this page…"
-            class="flex-1 rounded-md border border-line bg-transparent px-3 py-2"
-            :disabled="!article?.ok || running"
-            @keydown.enter="ask"
-          />
-          <button
-            class="rounded-md bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent px-3 py-2"
-            :disabled="!article?.ok || running || !question.trim()"
-            @click="ask"
-          >Ask</button>
+        <div class="border-t border-line">
+          <!-- Pending attachments -->
+          <div v-if="attachments.length" class="flex flex-wrap gap-2 px-3 pt-3">
+            <div v-for="(src, i) in attachments" :key="i" class="relative">
+              <img :src="src" class="h-14 w-14 object-cover rounded border border-line" />
+              <button
+                class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-accent text-on-accent text-[10px] leading-none grid place-items-center"
+                title="Remove"
+                @click="removeAttachment(i)"
+              >✕</button>
+            </div>
+          </div>
+
+          <div class="p-3 flex gap-2">
+            <button
+              class="rounded-md border border-line w-10 px-0 py-2 hover:bg-surface disabled:opacity-50"
+              :disabled="!article?.ok || running"
+              title="Attach images from this page"
+              @click="openImagePicker"
+            >＋</button>
+            <input
+              v-model="question"
+              placeholder="Ask about this page…"
+              class="flex-1 rounded-md border border-line bg-transparent px-3 py-2"
+              :disabled="!article?.ok || running"
+              @keydown.enter="ask"
+            />
+            <button
+              class="rounded-md bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent px-3 py-2"
+              :disabled="!article?.ok || running || (!question.trim() && !attachments.length)"
+              @click="ask"
+            >Ask</button>
+          </div>
         </div>
       </template>
     </template>
+
+    <!-- Image picker overlay -->
+    <div v-if="showImagePicker" class="absolute inset-0 z-10 flex flex-col bg-app">
+      <header class="flex items-center gap-2 px-3 py-2 border-b border-line">
+        <span class="font-semibold flex-1 text-sm">Attach images from this page</span>
+        <button class="text-muted hover:text-content" title="Cancel" @click="showImagePicker = false">✕</button>
+      </header>
+      <div class="flex-1 overflow-y-auto p-3">
+        <p v-if="loadingImages" class="text-muted text-sm">Finding images…</p>
+        <p v-else-if="!pageImages.length" class="text-muted text-sm">No images found on this page.</p>
+        <div v-else class="grid grid-cols-3 gap-2">
+          <button
+            v-for="img in pageImages"
+            :key="img.src"
+            class="relative aspect-square rounded overflow-hidden border-2"
+            :class="picked.has(img.src) ? 'border-accent' : 'border-line'"
+            :title="img.alt || img.src"
+            @click="togglePick(img.src)"
+          >
+            <img :src="img.src" class="h-full w-full object-cover" loading="lazy" />
+            <span
+              v-if="picked.has(img.src)"
+              class="absolute top-1 right-1 h-5 w-5 rounded-full bg-accent text-on-accent text-xs grid place-items-center"
+            >✓</span>
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 px-3 py-3 border-t border-line">
+        <span class="text-xs text-muted flex-1">{{ picked.size }} selected</span>
+        <button class="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface" @click="showImagePicker = false">Cancel</button>
+        <button
+          class="rounded-md bg-accent hover:bg-accent-hover disabled:opacity-50 text-on-accent px-3 py-1.5 text-sm font-medium"
+          :disabled="!picked.size || attaching"
+          @click="confirmAttach"
+        >{{ attaching ? 'Attaching…' : `Attach (${picked.size})` }}</button>
+      </div>
+    </div>
   </div>
 </template>
