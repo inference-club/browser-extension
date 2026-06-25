@@ -7,7 +7,7 @@ import type { SummaryStyle } from './settings';
 
 // Cap article text so we stay within typical context windows. The cluster's
 // default tool model has a modest window (see PRD 14 §3); be conservative.
-const MAX_CHARS = 24000;
+export const MAX_CHARS = 24000;
 
 const STYLE_INSTRUCTION: Record<SummaryStyle, string> = {
   tldr: 'Write a concise 2–3 sentence TL;DR of the article.',

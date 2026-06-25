@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: light dark;
-}
+/* Class-based dark mode: `dark:` utilities respond to a `.dark` class on <html>
+   (set by lib/theme.ts) rather than only the OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 html,
 body {

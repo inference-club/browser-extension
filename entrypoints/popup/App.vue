@@ -10,7 +10,7 @@ onMounted(async () => {
 });
 
 // Open the side panel, optionally queuing an action for it to run on load.
-async function openPanel(action?: 'summarize' | 'ask') {
+async function openPanel(action?: 'summarize' | 'ask' | 'history') {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (action) await chrome.storage.local.set({ pendingAction: action });
   if (tab?.windowId != null) {
@@ -39,6 +39,12 @@ async function openPanel(action?: 'summarize' | 'ask') {
         @click="openPanel('ask')"
       >
         Ask about this page
+      </button>
+      <button
+        class="w-full mb-2 rounded-md border border-neutral-300 dark:border-neutral-700 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+        @click="openPanel('history')"
+      >
+        History
       </button>
       <button
         class="w-full rounded-md border border-neutral-300 dark:border-neutral-700 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800"

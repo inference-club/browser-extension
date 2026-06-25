@@ -39,6 +39,10 @@ function extractArticle() {
       text: parsed.textContent.trim(),
       excerpt: parsed.excerpt || '',
       length: parsed.length || 0,
+      siteName: parsed.siteName || '',
+      dir: parsed.dir || '',
+      lang: parsed.lang || document.documentElement.lang || '',
+      publishedTime: parsed.publishedTime || '',
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

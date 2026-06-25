@@ -9,6 +9,11 @@ export interface Article {
   text?: string;
   excerpt?: string;
   length?: number;
+  // Extra Readability fields, surfaced in advanced mode.
+  siteName?: string;
+  dir?: string;
+  lang?: string;
+  publishedTime?: string;
   error?: string;
 }
 
